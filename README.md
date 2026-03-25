@@ -111,18 +111,3 @@ That Durable Object stores:
 - recent conversation messages
 
 So follow-up chat can reference the latest review instead of acting like every request is brand new.
-
-## Why this is a good fit for the Cloudflare internship
-
-This project is intentionally close to the kind of thing Cloudflare wants to see in the optional repo submission:
-
-- platform-native instead of generic
-- simple enough to review quickly
-- demonstrates state, routing, AI, and frontend together
-- deployable with a small amount of setup
-
-## Notes
-
-- The UI is intentionally lightweight so the repo stays easy to review.
-- This implementation uses Durable Objects directly rather than the higher-level Agents SDK UI hooks, which keeps the code easier to run and reason about while still satisfying the assignment requirements.
-- `PROMPTS.md` includes the AI prompts used during scaffolding and refinement, per the assignment instructions.
