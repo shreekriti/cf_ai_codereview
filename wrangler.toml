@@ -1,0 +1,19 @@
+name = "cf-ai-codereview"
+main = "src/index.ts"
+compatibility_date = "2026-03-25"
+compatibility_flags = ["nodejs_compat"]
+
+[ai]
+binding = "AI"
+
+[[durable_objects.bindings]]
+name = "CODE_REVIEW_AGENT"
+class_name = "CodeReviewAgent"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["CodeReviewAgent"]
+
+[assets]
+directory = "./public"
+binding = "ASSETS"

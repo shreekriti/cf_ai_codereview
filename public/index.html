@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CodeSense — Cloudflare AI Code Review Agent</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0d0f14;
+      --bg2: #141924;
+      --bg3: #1a2030;
+      --panel: #101521;
+      --border: #2a3244;
+      --text: #e8eefc;
+      --muted: #8f9db6;
+      --dim: #5d6880;
+      --accent: #4fffb0;
+      --accent2: #00d4ff;
+      --danger: #ff7b7b;
+      --yellow: #ffd166;
+      --shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+      --radius: 12px;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      background: linear-gradient(180deg, #0d0f14 0%, #0b0e14 100%);
+      color: var(--text);
+      font-family: "Syne", system-ui, sans-serif;
+      overflow: hidden;
+    }
+
+    header {
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(13, 15, 20, 0.95);
+      backdrop-filter: blur(8px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      font-size: 18px;
+    }
+
+    .brand-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #05120d;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .top-meta {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .pill {
+      padding: 7px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--bg2);
+      white-space: nowrap;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      gap: 0;
+      height: calc(100vh - 64px);
+    }
+
+    .panel {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .panel-left {
+      border-right: 1px solid var(--border);
+      background: var(--panel);
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg2);
+      font-family: "JetBrains Mono", monospace;
+      font-size: 12px;
+      color: var(--muted);
+      gap: 12px;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    select, textarea, input, button {
+      font: inherit;
+    }
+
+    select, input, textarea {
+      background: var(--bg3);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      outline: none;
+    }
+
+    select, .note-input {
+      padding: 9px 12px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 12px;
+    }
+
+    .editor-wrap {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      min-height: 0;
+      flex: 1;
+    }
+
+    .examples {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding: 16px 18px 10px;
+      border-bottom: 1px solid rgba(42, 50, 68, 0.6);
+      background: #0f141f;
+    }
+
+    .chip {
+      border: 1px solid var(--border);
+      background: #111827;
+      color: var(--muted);
+      padding: 8px 12px;
+      border-radius: 999px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: 0.15s ease;
+    }
+
+    .chip:hover {
+      color: var(--text);
+      border-color: var(--accent2);
+      transform: translateY(-1px);
+    }
+
+    .code-shell {
+      position: relative;
+      min-height: 0;
+      background: #0a0d14;
+    }
+
+    .line-numbers {
+      position: absolute;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      width: 52px;
+      padding: 16px 10px 16px 0;
+      text-align: right;
+      color: var(--dim);
+      font-family: "JetBrains Mono", monospace;
+      font-size: 13px;
+      line-height: 20px;
+      border-right: 1px solid rgba(42, 50, 68, 0.6);
+      user-select: none;
+      overflow: hidden;
+      background: #0a0d14;
+    }
+
+    textarea {
+      width: 100%;
+      height: 100%;
+      resize: none;
+      border: none;
+      border-radius: 0;
+      background: transparent;
+      color: var(--text);
+      padding: 16px 18px 16px 68px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 13px;
+      line-height: 20px;
+      tab-size: 2;
+    }
+
+    .editor-footer {
+      padding: 16px 18px;
+      border-top: 1px solid rgba(42, 50, 68, 0.6);
+      background: #0f141f;
+      display: grid;
+      gap: 12px;
+    }
+
+    .editor-controls {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .note-input {
+      width: 100%;
+    }
+
+    button {
+      border: none;
+      border-radius: 10px;
+      padding: 11px 16px;
+      cursor: pointer;
+      font-weight: 700;
+      transition: 0.15s ease;
+    }
+
+    .primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #07130f;
+      box-shadow: var(--shadow);
+    }
+
+    .secondary {
+      background: #1a2232;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    button:hover { transform: translateY(-1px); }
+    button:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+
+    .panel-right {
+      background: radial-gradient(circle at top left, rgba(0, 212, 255, 0.08), transparent 28%), var(--bg);
+    }
+
+    .chat-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .message {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      background: rgba(20, 25, 36, 0.85);
+      box-shadow: var(--shadow);
+    }
+
+    .message.user {
+      align-self: flex-end;
+      max-width: 88%;
+      background: rgba(15, 38, 40, 0.9);
+      border-color: rgba(79, 255, 176, 0.18);
+    }
+
+    .message.assistant {
+      max-width: 100%;
+    }
+
+    .message-label {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .message-content {
+      font-size: 14px;
+      line-height: 1.65;
+      color: var(--text);
+      word-break: break-word;
+    }
+
+    .message-content h1,
+    .message-content h2,
+    .message-content h3 {
+      margin: 14px 0 8px;
+      color: var(--accent);
+      font-size: 16px;
+    }
+
+    .message-content pre {
+      margin: 12px 0;
+      padding: 14px;
+      background: #070a10;
+      border: 1px solid rgba(42, 50, 68, 0.7);
+      border-radius: 10px;
+      overflow-x: auto;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .message-content code {
+      font-family: "JetBrains Mono", monospace;
+      background: rgba(255, 255, 255, 0.06);
+      padding: 2px 5px;
+      border-radius: 6px;
+      font-size: 12px;
+    }
+
+    .message-content pre code {
+      background: transparent;
+      padding: 0;
+    }
+
+    .message-content ul,
+    .message-content ol {
+      padding-left: 20px;
+      margin: 10px 0;
+    }
+
+    .chat-footer {
+      padding: 16px 18px 18px;
+      border-top: 1px solid var(--border);
+      display: grid;
+      gap: 10px;
+      background: rgba(13, 15, 20, 0.92);
+    }
+
+    .chat-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+    }
+
+    .helper {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .status {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .danger { color: var(--danger); }
+
+    @media (max-width: 1024px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .panel-left {
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+        min-height: 48vh;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="brand-icon">CF</div>
+      <div>CodeSense <span style="color: var(--accent2)">Agent</span></div>
+    </div>
+    <div class="top-meta">
+      <div class="pill" id="statsPill">reviews: 0</div>
+      <div class="pill" id="langPill">last language: none</div>
+      <div class="pill">Workers AI + Durable Objects</div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="panel panel-left">
+      <div class="section-header">
+        <div>editor.ts</div>
+        <div class="header-actions">
+          <select id="languageSelect" aria-label="Language selector">
+            <option value="auto-detect">Auto detect</option>
+            <option>JavaScript</option>
+            <option>TypeScript</option>
+            <option>Python</option>
+            <option>Java</option>
+            <option>SQL</option>
+            <option>HTML</option>
+            <option>CSS</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="editor-wrap">
+        <div class="examples">
+          <button class="chip" data-example="sql">SQL injection example</button>
+          <button class="chip" data-example="async">Async bug example</button>
+          <button class="chip" data-example="react">React rerender example</button>
+          <button class="chip" data-example="python">Python logic example</button>
+        </div>
+
+        <div class="code-shell">
+          <div class="line-numbers" id="lineNumbers"></div>
+          <textarea id="codeInput" spellcheck="false" placeholder="Paste code here, then click Review Code..."></textarea>
+        </div>
+
+        <div class="editor-footer">
+          <div class="editor-controls">
+            <input id="contextInput" class="note-input" type="text" placeholder="Optional context: what should the reviewer focus on? e.g. security, performance, edge cases" />
+            <button class="secondary" id="clearButton">Clear</button>
+            <button class="primary" id="reviewButton">Review Code</button>
+          </div>
+          <div class="helper">This app stores session memory inside a Cloudflare Durable Object, so your follow-up questions can refer back to the last review.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel panel-right">
+      <div class="section-header">
+        <div>chat + review memory</div>
+        <div class="status" id="statusText">ready</div>
+      </div>
+
+      <div class="chat-body" id="messages"></div>
+
+      <div class="chat-footer">
+        <div class="chat-row">
+          <input id="chatInput" type="text" placeholder="Ask a follow-up, e.g. ‘can you rewrite this in TypeScript?’" />
+          <button class="secondary" id="sendButton">Send</button>
+        </div>
+        <div class="helper">What this project proves for the assignment: LLM on Workers AI, stateful memory on Durable Objects, browser chat input, and worker-based coordination.</div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const codeInput = document.getElementById('codeInput');
+    const lineNumbers = document.getElementById('lineNumbers');
+    const reviewButton = document.getElementById('reviewButton');
+    const clearButton = document.getElementById('clearButton');
+    const sendButton = document.getElementById('sendButton');
+    const chatInput = document.getElementById('chatInput');
+    const messagesEl = document.getElementById('messages');
+    const statusText = document.getElementById('statusText');
+    const statsPill = document.getElementById('statsPill');
+    const langPill = document.getElementById('langPill');
+    const languageSelect = document.getElementById('languageSelect');
+    const contextInput = document.getElementById('contextInput');
+
+    const EXAMPLES = {
+      sql: `app.get('/user', async (req, res) => {
+  const id = req.query.id;
+  const query = "SELECT * FROM users WHERE id = " + id;
+  const result = await db.query(query);
+  res.json(result.rows[0]);
+});`,
+      async: `async function processOrders(orderIds) {
+  const results = [];
+  orderIds.forEach(async (id) => {
+    const order = await fetchOrder(id);
+    results.push(order);
+  });
+  return results;
+}`,
+      react: `function Dashboard({ items }) {
+  const [query, setQuery] = React.useState('');
+  const filtered = items.filter(item => item.name.includes(query));
+
+  React.useEffect(() => {
+    window.addEventListener('resize', () => console.log('resize'));
+  }, []);
+
+  return filtered.map(item => <Card item={item} />);
+}`,
+      python: `def average(values):
+    total = 0
+    for i in range(len(values) + 1):
+        total += values[i]
+    return total / len(values)`
+    };
+
+    const SESSION_KEY = 'cf_ai_codereview_session_id';
+    const sessionId = localStorage.getItem(SESSION_KEY) || crypto.randomUUID();
+    localStorage.setItem(SESSION_KEY, sessionId);
+
+    function setStatus(text, isError = false) {
+      statusText.textContent = text;
+      statusText.classList.toggle('danger', isError);
+    }
+
+    function escapeHtml(value) {
+      return value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function markdownToHTML(markdown) {
+      let html = escapeHtml(markdown);
+
+      html = html.replace(/```(\w+)?\n([\s\S]*?)```/g, (_, lang, code) => {
+        const safeLang = lang ? `<div style="font-size:11px;color:#8f9db6;margin-bottom:8px;">${escapeHtml(lang)}</div>` : '';
+        return `<pre>${safeLang}<code>${code.trim()}</code></pre>`;
+      });
+
+      html = html.replace(/^###\s+(.*)$/gm, '<h3>$1</h3>');
+      html = html.replace(/^##\s+(.*)$/gm, '<h2>$1</h2>');
+      html = html.replace(/^#\s+(.*)$/gm, '<h1>$1</h1>');
+      html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+      html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+      html = html.replace(/^\-\s+(.*)$/gm, '<li>$1</li>');
+      html = html.replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>');
+      html = html.replace(/^\d+\.\s+(.*)$/gm, '<li>$1</li>');
+      html = html.replace(/(?:<\/ul>\s*)?<ul>(\s*<li>.*?<\/li>\s*)<\/ul>/gs, '<ul>$1</ul>');
+      html = html.replace(/(?:<\/ol>\s*)?<ol>(\s*<li>.*?<\/li>\s*)<\/ol>/gs, '<ol>$1</ol>');
+
+      const blocks = html
+        .split(/\n{2,}/)
+        .map(part => part.trim())
+        .filter(Boolean)
+        .map(part => {
+          if (/^<(h\d|ul|ol|pre)/.test(part)) return part;
+          return `<p>${part.replace(/\n/g, '<br />')}</p>`;
+        });
+
+      return blocks.join('');
+    }
+
+    function addMessage(role, content) {
+      const wrapper = document.createElement('div');
+      wrapper.className = `message ${role}`;
+
+      const label = document.createElement('div');
+      label.className = 'message-label';
+      label.textContent = role === 'assistant' ? 'CodeSense' : 'You';
+
+      const body = document.createElement('div');
+      body.className = 'message-content';
+      body.innerHTML = markdownToHTML(content);
+
+      wrapper.append(label, body);
+      messagesEl.appendChild(wrapper);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function updateLineNumbers() {
+      const lineCount = Math.max(1, codeInput.value.split('\n').length);
+      lineNumbers.innerHTML = Array.from({ length: lineCount }, (_, index) => `<div>${index + 1}</div>`).join('');
+      lineNumbers.scrollTop = codeInput.scrollTop;
+    }
+
+    async function refreshStats() {
+      const response = await fetch(`/api/session/${encodeURIComponent(sessionId)}/stats`);
+      if (!response.ok) return;
+      const stats = await response.json();
+      statsPill.textContent = `reviews: ${stats.totalReviews ?? 0}`;
+      langPill.textContent = `last language: ${stats.lastLanguage ?? 'none'}`;
+    }
+
+    async function sendReview() {
+      const code = codeInput.value.trim();
+      if (!code) {
+        setStatus('paste some code first', true);
+        return;
+      }
+
+      setStatus('reviewing...');
+      reviewButton.disabled = true;
+
+      addMessage('user', `Please review this ${languageSelect.value === 'auto-detect' ? 'code' : languageSelect.value + ' code'} snippet.`);
+
+      try {
+        const response = await fetch(`/api/session/${encodeURIComponent(sessionId)}/review`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            code,
+            language: languageSelect.value,
+            userNote: contextInput.value.trim(),
+          }),
+        });
+
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || 'Review request failed.');
+
+        addMessage('assistant', payload.reply);
+        setStatus('ready');
+        await refreshStats();
+      } catch (error) {
+        setStatus(error.message || 'Something went wrong.', true);
+        addMessage('assistant', `I ran into an error: ${error.message || 'unknown error'}`);
+      } finally {
+        reviewButton.disabled = false;
+      }
+    }
+
+    async function sendChat() {
+      const message = chatInput.value.trim();
+      if (!message) return;
+
+      chatInput.value = '';
+      sendButton.disabled = true;
+      setStatus('thinking...');
+      addMessage('user', message);
+
+      try {
+        const response = await fetch(`/api/session/${encodeURIComponent(sessionId)}/chat`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ message }),
+        });
+
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || 'Chat request failed.');
+
+        addMessage('assistant', payload.reply);
+        setStatus('ready');
+        await refreshStats();
+      } catch (error) {
+        setStatus(error.message || 'Something went wrong.', true);
+        addMessage('assistant', `I ran into an error: ${error.message || 'unknown error'}`);
+      } finally {
+        sendButton.disabled = false;
+      }
+    }
+
+    document.querySelectorAll('[data-example]').forEach(button => {
+      button.addEventListener('click', () => {
+        codeInput.value = EXAMPLES[button.dataset.example];
+        updateLineNumbers();
+      });
+    });
+
+    codeInput.addEventListener('input', updateLineNumbers);
+    codeInput.addEventListener('scroll', () => {
+      lineNumbers.scrollTop = codeInput.scrollTop;
+    });
+    reviewButton.addEventListener('click', sendReview);
+    sendButton.addEventListener('click', sendChat);
+    clearButton.addEventListener('click', () => {
+      codeInput.value = '';
+      contextInput.value = '';
+      updateLineNumbers();
+      setStatus('ready');
+    });
+    chatInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') sendChat();
+    });
+
+    addMessage('assistant', `Welcome — this Cloudflare assignment project is a stateful AI code review app. Paste code on the left, run a review, then ask follow-up questions here. Your session memory is tied to: \`${sessionId}\`.`);
+    updateLineNumbers();
+    refreshStats();
+  </script>
+</body>
+</html>
